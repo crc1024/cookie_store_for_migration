@@ -9,6 +9,9 @@ module ActionDispatch
 
         source_options = @default_options.delete(:source_session_store)
         @source_store = source_options[:session_store]
+        if @source_store.is_a?(Symbol)
+          @source_store = Session.const_get(@source_store.to_s.classify)
+        end
         @source_options = source_options[:options]
         @destroy_source_session = source_options[:destroy]
       end

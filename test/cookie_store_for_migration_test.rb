@@ -41,7 +41,7 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
       source_cookie = cookies['first_key']
     end
     with_test_route_set(ActionDispatch::Session::CookieStoreForMigration, key: 'next_key', source_session_store: {
-      session_store: ActionDispatch::Session::CookieStore,
+      session_store: :cookie_store,
       options: {
         key: 'first_key'
       },
