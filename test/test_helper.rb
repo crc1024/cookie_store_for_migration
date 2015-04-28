@@ -1,21 +1,12 @@
-require 'minitest/autorun'
-require 'rspec/mocks'
-require 'cookie_store_for_migration'
-
-module MinitestRSpecMocksIntegration
-  include ::RSpec::Mocks::ExampleMethods
-
-  def before_setup
-    ::RSpec::Mocks.setup
-    super
-  end
-
-  def after_teardown
-    super
-    ::RSpec::Mocks.verify
-  ensure
-    ::RSpec::Mocks.teardown
-  end
+require 'rails/version'
+case Rails::VERSION::MAJOR
+when 3
+  require 'abstract_unit_rails3.rb'
+when 4
+  require 'abstract_unit_rails4.rb'
 end
 
-Minitest::Test.send(:include, MinitestRSpecMocksIntegration)
+require 'minitest/autorun'
+require 'mocha'
+require 'mocha/mini_test'
+require 'cookie_store_for_migration'

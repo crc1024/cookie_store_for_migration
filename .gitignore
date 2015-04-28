@@ -2,4 +2,4 @@
 log/*.log
 pkg/
 *.swp
-/Gemfile.lock
+*.lock

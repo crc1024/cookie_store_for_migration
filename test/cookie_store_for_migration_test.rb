@@ -1,11 +1,15 @@
-require 'abstract_unit'
-require 'active_support/key_generator'
-require 'rspec/mocks'
 require 'test_helper'
+if Rails::VERSION::MAJOR == 4
+  require 'active_support/key_generator'
+end
 
 class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
+  BEFORE_COOKIE = 'BAh7B0kiD3Nlc3Npb25faWQGOgZFVEkiJTM1NGFhOWUwOGViNDAyYzM0ZmI4OTg4YjZkNjI1NDIyBjsAVEkiCWZ1Z2EGOwBUSSIVc2Vzc2lvbl92YWx1ZSEhIQY7AFQ=--21ab4af7862ea54038e82b6d3651adc7416adf8c' # session = {"session_id"=>"9d8ce4f8aae3d407f71202cdc79e8d47", "fuga"=>"session_value!!!"}
   SessionSecret = 'e8316dc2ece70f9a179d9a75f7d556a1ce92fa0dc4eaf4676460ef604ad4a7981cd782bba7ceb402'
-  Generator = ActiveSupport::LegacyKeyGenerator.new(SessionSecret)
+
+  if Rails::VERSION::MAJOR == 4
+    Generator = ActiveSupport::LegacyKeyGenerator.new(SessionSecret)
+  end
 
   class SessionController < ActionController::Base
     def initialize_session
@@ -33,13 +37,6 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
 
   def test_migration_with_destroy
     source_cookie = nil
-    with_test_route_set(ActionDispatch::Session::CookieStore, key: 'first_key') do
-      get '/initialize_session'
-      get '/session_id'
-      get '/store', key: 'fuga', value: 'session_value!!!'
-      assert cookies['first_key'].present?, 'have source session'
-      source_cookie = cookies['first_key']
-    end
     with_test_route_set(ActionDispatch::Session::CookieStoreForMigration, key: 'next_key', source_session_store: {
       session_store: :cookie_store,
       options: {
@@ -47,7 +44,7 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
       },
       destroy: 'destroy'
     }) do
-      cookies['first_key'] = source_cookie
+      cookies['first_key'] = BEFORE_COOKIE
       get '/initialize_session'
       assert cookies['next_key'].present?, 'create new session'
       assert cookies['destroy'].present?, 'have the destroy cookie'
@@ -61,21 +58,13 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
   end
 
   def test_migration_without_destroy
-    source_cookie = nil
-    with_test_route_set(ActionDispatch::Session::CookieStore, key: 'first_key') do
-      get '/initialize_session'
-      get '/store', key: 'fuga', value: 'session_value!!!'
-      get '/session_id'
-      assert cookies['first_key'].present?, 'have source session'
-      source_cookie = cookies['first_key']
-    end
     with_test_route_set(ActionDispatch::Session::CookieStoreForMigration, key: 'next_key', source_session_store: {
       session_store: ActionDispatch::Session::CookieStore,
       options: {
         key: 'first_key'
       }
     }) do
-      cookies['first_key'] = source_cookie
+      cookies['first_key'] = BEFORE_COOKIE
       get '/initialize_session'
       assert cookies['next_key'].present?, 'create new session'
       assert_nil cookies['destroy'], 'have no destroy cookie'
@@ -119,7 +108,8 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
   end
 
   def test_without_source_session
-    no_session_store = double
+    no_session_store = mock('no_session_store')
+    no_session_store.stubs(:new).raises(Exception)
     with_test_route_set(ActionDispatch::Session::CookieStoreForMigration, key: 'key', source_session_store: {
       session_store: no_session_store,
       options: {
@@ -128,9 +118,8 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
       destroy: 'destroy'
     }) do
       get '/session_id'
-      assert_equal body, '' # there are no session
+      assert_equal '', body.strip # there are no session
       assert_nil cookies['destroy']
-      expect(no_session_store).to_not receive(:new)
       get '/initialize_session'
       get '/session_id'
       assert body.present? # there are no session
@@ -139,7 +128,11 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
 
   private
   def get(path, parameters = nil, env = {})
-    env["action_dispatch.key_generator"] ||= Generator
+    if Rails::VERSION::MAJOR == 4
+      env["action_dispatch.key_generator"] ||= Generator
+    else
+      env["action_dispatch.secret_token"] ||= SessionSecret
+    end
     super
   end
 
