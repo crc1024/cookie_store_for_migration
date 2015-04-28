@@ -4,8 +4,10 @@ if Rails::VERSION::MAJOR == 4
 end
 
 class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
-  BEFORE_COOKIE = 'BAh7B0kiD3Nlc3Npb25faWQGOgZFVEkiJTM1NGFhOWUwOGViNDAyYzM0ZmI4OTg4YjZkNjI1NDIyBjsAVEkiCWZ1Z2EGOwBUSSIVc2Vzc2lvbl92YWx1ZSEhIQY7AFQ=--21ab4af7862ea54038e82b6d3651adc7416adf8c' # session = {"session_id"=>"9d8ce4f8aae3d407f71202cdc79e8d47", "fuga"=>"session_value!!!"}
   SessionSecret = 'e8316dc2ece70f9a179d9a75f7d556a1ce92fa0dc4eaf4676460ef604ad4a7981cd782bba7ceb402'
+  InitialSession = {session_id: SecureRandom.hex(16), fuga: 'session_value!!!'}
+  Verifier = ActiveSupport::MessageVerifier.new(SessionSecret, digest: 'SHA1')
+  SignedCookie = Verifier.generate(InitialSession)
 
   if Rails::VERSION::MAJOR == 4
     Generator = ActiveSupport::LegacyKeyGenerator.new(SessionSecret)
@@ -23,7 +25,7 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
     end
 
      def session_id
-      render :text => session[:session_id]
+      render :text => request.session_options[:id]
     end
 
     def get
@@ -32,6 +34,16 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
 
     def keys
       render text: session.keys
+    end
+  end
+
+  def test_initial_session
+    with_test_route_set(ActionDispatch::Session::CookieStore, key: '_session') do
+      cookies['_session'] = SignedCookie
+      get '/session_id'
+      assert_equal InitialSession[:session_id], body
+      get '/get', key: 'fuga'
+      assert_equal InitialSession[:fuga], body
     end
   end
 
@@ -44,7 +56,7 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
       },
       destroy: 'destroy'
     }) do
-      cookies['first_key'] = BEFORE_COOKIE
+      cookies['first_key'] = SignedCookie
       get '/initialize_session'
       assert cookies['next_key'].present?, 'create new session'
       assert cookies['destroy'].present?, 'have the destroy cookie'
@@ -64,7 +76,7 @@ class CookieStoreForMigrationTest < ActionDispatch::IntegrationTest
         key: 'first_key'
       }
     }) do
-      cookies['first_key'] = BEFORE_COOKIE
+      cookies['first_key'] = SignedCookie
       get '/initialize_session'
       assert cookies['next_key'].present?, 'create new session'
       assert_nil cookies['destroy'], 'have no destroy cookie'
